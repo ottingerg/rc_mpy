@@ -3,6 +3,14 @@ from uasyncio.websocket.server import WSReader, WSWriter
 import uos as os
 import machine
 
+PWM_CHANNELS = {
+    machine.PWM(machine.Pin(5), freq=50),
+    machine.PWM(machine.Pin(12), freq=50),
+    machine.PWM(machine.Pin(13), freq=50),
+    machine.PWM(machine.Pin(14), freq=50),
+    machine.PWM(machine.Pin(15), freq=50),
+}
+
 def res():
     machine.reset()
 
@@ -50,7 +58,7 @@ async def dns_server():
         except socket.error:
             pass
 
-async def websocket_handler(reader,writer):
+async def websocket_echo_handler(reader,writer):
     # Consume GET line
     yield from reader.readline()
 
@@ -65,6 +73,30 @@ async def websocket_handler(reader,writer):
         else:
             await writer.awrite(l.upper())
 
+async def websocket_rc_receiver_handler(reader,writer):
+    # Consume GET line
+    yield from reader.readline()
+
+    reader = yield from WSReader(reader, writer)
+
+    while True:
+        l = yield from reader.readline()
+        try:
+            channel = int(l.split(",")[0])
+            motor_type = int(l.split(",")[1])
+            value = float(l.split(",")[2])
+
+            if motor_type == "servo":
+                #convert angle to pwm
+                value = value / 180 * 75 + 40
+            else:
+                #convert percent to pwm
+                value = value / 100 * 1023
+
+            PWM_CHANNELS[channel].duty(value)
+
+        except:
+            pass
 
 async def http_handler(reader,writer):
     DIR_PREFIX = "www/"
@@ -108,6 +140,7 @@ async def http_handler(reader,writer):
 loop = asyncio.get_event_loop()
 loop.create_task(dns_server())
 loop.create_task(asyncio.start_server(http_handler, "0.0.0.0", 80))
-loop.create_task(asyncio.start_server(websocket_handler, "0.0.0.0", 8081))
+loop.create_task(asyncio.start_server(websocket_echo_handler, "0.0.0.0", 8081))
+loop.create_task(asyncio.start_server(websocket_rc_receiver_handler, "0.0.0.0", 8082))
 loop.run_forever()
 loop.close()
