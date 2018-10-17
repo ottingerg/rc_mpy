@@ -6,6 +6,50 @@ import machine
 def res():
     machine.reset()
 
+async def dns_server():
+    def getPacketAnswerA(packet, ipV4Bytes) :
+        try :
+            queryEndPos = 12
+            while True :
+                domPartLen = packet[queryEndPos]
+                if (domPartLen == 0) :
+                    break
+                queryEndPos += 1 + domPartLen
+            queryEndPos += 5
+
+            return b''.join( [
+                packet[:2],             # Query identifier
+                b'\x85\x80',            # Flags and codes
+                packet[4:6],            # Query question count
+                b'\x00\x01',            # Answer record count
+                b'\x00\x00',            # Authority record count
+                b'\x00\x00',            # Additional record count
+                packet[12:queryEndPos], # Query question
+                b'\xc0\x0c',            # Answer name as pointer
+                b'\x00\x01',            # Answer type A
+                b'\x00\x01',            # Answer class IN
+                b'\x00\x00\x00\x1E',    # Answer TTL 30 secondes
+                b'\x00\x04',            # Answer data length
+                ipV4Bytes ] )           # Answer data
+
+        except :
+            pass
+
+        return None
+
+    s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+    s.bind(('127.0.0.1',53))
+    s.setblocking(False)
+
+    while True:
+        try:
+            await asyncio.sleep(1)
+            packet, clientIP = s.recvfrom(256)
+            packet = getPacketAnswerA (packet, b'\x01\x02\x03\x04')
+            s.sendto(packet, clientIP)
+        except socket.error:
+            pass
+
 async def websocket_handler(reader,writer):
     # Consume GET line
     yield from reader.readline()
@@ -62,6 +106,7 @@ async def http_handler(reader,writer):
 
 
 loop = asyncio.get_event_loop()
+loop.create_task(dns_server())
 loop.create_task(asyncio.start_server(http_handler, "0.0.0.0", 80))
 loop.create_task(asyncio.start_server(websocket_handler, "0.0.0.0", 8081))
 loop.run_forever()
