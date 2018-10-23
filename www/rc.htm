@@ -1,0 +1,64 @@
+< !DOCTYPE html >
+  <html >
+  <body >
+  <canvas id = "canvas_xy" width = "400" height = "400"
+  style = "background-color:#333" >
+  </canvas >
+  <canvas id = "canvas_leveler" width = "60" height = "400"
+  style = "background-color:#333" >
+  </canvas > <script > var canvas_xy = document.getElementById ("canvas_xy");
+var canvas_leveler = document.getElementById ("canvas_leveler");
+
+var ctr_xy = new controller (30, 30, "red", canvas_xy);
+var ctr_leveler = new controller (60, 20, "gray", canvas_leveler);
+
+canvas_xy.addEventListener ("click", function (event)
+			    {
+			    ctr_xy.moved (event);
+			    }
+
+			    , false);
+canvas_leveler.addEventListener ("click", function (event)
+				 {
+				 ctr_leveler.moved (event);
+				 }
+
+				 , false);
+
+function
+controller (width, height, color, canvas)
+{
+  this.width = width;
+  this.height = height;
+  this.color = color;
+  this.canvas = canvas;
+
+  this.update = function (x, y)
+  {
+    var ctx = this.canvas.getContext ("2d");
+    ctx.clearRect (0, 0, this.canvas.width, this.canvas.height);
+
+    if (x + width / 2 > this.canvas.width)
+      x = this.canvas.width - width / 2;
+    if (y + height / 2 > this.canvas.height)
+      y = this.canvas.height - height / 2;
+    if (x - width / 2 < 0)
+      x = width / 2;
+    if (y - height / 2 < 0)
+      y = height / 2;
+
+    ctx.fillRect (x - width / 2, y - height / 2, width, height);
+    ctx.fillStyle = this.color;
+    ctx.fill ();
+  }
+
+  this.moved = function (event)
+  {
+    var rect = this.canvas.getBoundingClientRect ();
+    var x = event.clientX - rect.left;
+    var y = event.clientY - rect.top;
+    this.update (x, y);
+  }
+}
+
+</script > </body > </html >
