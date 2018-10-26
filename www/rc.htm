@@ -4,21 +4,27 @@
   <canvas id = "canvas_xy" width = "400" height = "400"
   style = "background-color:#333" >
   </canvas >
-  <canvas id = "canvas_leveler" width = "60" height = "340" 
+  <canvas id = "canvas_leveler" width = "60" height = "340"
   style = "position: absolute; top: 10; background-color:#333" >
-  </canvas > 
+  </canvas >
   <canvas id = "canvas_lights" width = "60" height = "60"
   style = "background-color:#333" >
-  </canvas > 
+  </canvas >
 
-<script > 
+<script >
 var canvas_xy = document.getElementById ("canvas_xy");
 var canvas_leveler = document.getElementById ("canvas_leveler");
 var canvas_lights = document.getElementById ("canvas_lights");
 
-var ctr_xy = new controller (42, 42, "red", canvas_xy);
-var ctr_leveler = new controller (60, 20, "gray", canvas_leveler);
-var swi_lights = new toggle_switch( "green", canvas_lights);
+var websocket = new WebSocket('ws://127.0.0.1:1234/');
+
+var trans = new transmitter(websocket);
+var ctr_xy = new controller (64, 64, "red", canvas_xy,function(x,y) {trans.update_move(x,y);});
+var ctr_leveler = new controller (60, 30, "gray", canvas_leveler,function(x,y) {trans.update_leveler(x,y);});
+var swi_lights = new toggle_switch( "green", canvas_lights,function(s) {trans.update_lights(s);});
+
+setInterval(function() {trans.send_updates();}, 20);
+
 
 ctr_xy.init();
 ctr_leveler.init();
@@ -39,18 +45,19 @@ canvas_leveler.addEventListener ("mousemove", function (event)
 
 canvas_lights.addEventListener ("click", function (event) { swi_lights.toggle(event); }, false);
 
-function 
-toggle_switch (color,canvas)
+function
+toggle_switch (color,canvas, update_switch)
 {
   this.color = color;
   this.canvas = canvas;
   this.state = false;
+  this.update_switch = update_switch;
 
-  this.toggle = function (event) 
+  this.toggle = function (event)
   {
     var ctx = this.canvas.getContext ("2d");
 
-    if(this.state) 
+    if(this.state)
     {
       this.state = false;
       ctx.clearRect (0,0, this.canvas.width, this.canvas.height);
@@ -60,18 +67,21 @@ toggle_switch (color,canvas)
       ctx.fillRect (0,0, this.canvas.width, this.canvas.height);
       ctx.fill();
     }
+
+    this.update_switch(this.state);
   }
 }
-      
+
 function
-controller (width, height, color, canvas)
+controller (width, height, color, canvas, update_xy)
 {
   this.width = width;
   this.height = height;
   this.color = color;
   this.canvas = canvas;
-  this.xold = 0
-  this.yold = 0
+  this.xold = 0;
+  this.yold = 0;
+  this.update_xy = update_xy;
 
   this.init = function() { this.update(this.canvas.width/2, this.canvas.height/2) };
 
@@ -92,8 +102,11 @@ controller (width, height, color, canvas)
     this.xold = x;
     this.yold = y;
 
+
+    this.update_xy(Math.round((x - this.canvas.width/2)*2/(this.canvas.width-width)*100),Math.round((y - this.canvas.height/2)*(-2)/(this.canvas.height-height)*100));
+
     ctx.fillStyle = this.color;
-    ctx.fillRect (x - width / 2, y - height / 2, width, height);    
+    ctx.fillRect (x - width / 2, y - height / 2, width, height);
     ctx.fill ();
   }
 
@@ -105,6 +118,53 @@ controller (width, height, color, canvas)
     var y = event.clientY - rect.top;
     this.update (x, y);
   }
+}
+
+function transmitter(websocket)
+{
+  this.motor = 0;
+  this.steering = 0;
+  this.leveler = 0;
+  this.lights = 0;
+  this.o_motor = 0;
+  this.o_steering = 0;
+  this.o_leveler = 0;
+  this.o_lights = 0;
+  this.websocket = websocket;
+
+  this.update_move = function(new_steering,new_motor) {
+    this.motor = new_motor;
+    this.steering = new_steering;
+  }
+
+  this.update_leveler = function(dummy,new_leveler) {
+    this.leveler = new_leveler;
+  }
+
+  this.update_lights = function(new_lights) {
+    this.lights = new_lights;
+  }
+
+  this.send_updates = function() {
+    if (this.o_motor != this.motor) {
+      this.websocket.send("motor "+this.motor);
+      this.o_motor = this.motor;
+    }
+    if (this.o_steering != this.steering) {
+      this.websocket.send("steering "+this.steering);
+      this.o_steering = this.steering;
+    }
+    if (this.o_leveler != this.leveler) {
+      this.websocket.send("leveler "+this.leveler);
+      this.o_leveler = this.leveler;
+    }
+    if (this.o_lights != this.lights) {
+      this.websocket.send("lights "+this.lights);
+      this.o_lights = this.lights;
+    }
+
+  }
+
 }
 
 </script > </body > </html >
