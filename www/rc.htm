@@ -16,7 +16,7 @@ var canvas_xy = document.getElementById ("canvas_xy");
 var canvas_leveler = document.getElementById ("canvas_leveler");
 var canvas_lights = document.getElementById ("canvas_lights");
 
-var websocket = new WebSocket('ws://127.0.0.1:1234/');
+var websocket = new WebSocket('ws://192.168.4.1:8082/');
 
 var trans = new transmitter(websocket);
 var ctr_xy = new controller (64, 64, "red", canvas_xy,function(x,y) {trans.update_move(x,y);});
@@ -147,19 +147,23 @@ function transmitter(websocket)
 
   this.send_updates = function() {
     if (this.o_motor != this.motor) {
-      this.websocket.send("motor "+this.motor);
+      this.websocket.send("motor "+this.motor+"\n");
       this.o_motor = this.motor;
     }
     if (this.o_steering != this.steering) {
-      this.websocket.send("steering "+this.steering);
+      this.websocket.send("steering "+this.steering+"\n");
       this.o_steering = this.steering;
     }
     if (this.o_leveler != this.leveler) {
-      this.websocket.send("leveler "+this.leveler);
+      this.websocket.send("leveler "+this.leveler+"\n");
       this.o_leveler = this.leveler;
     }
     if (this.o_lights != this.lights) {
-      this.websocket.send("lights "+this.lights);
+      if(this.lights == true) {
+        this.websocket.send("lights 100\n");
+      } else {
+        this.websocket.send("lights 0\n");
+      }
       this.o_lights = this.lights;
     }
 

@@ -2,14 +2,70 @@ import uasyncio as asyncio
 from uasyncio.websocket.server import WSReader, WSWriter
 import uos as os
 import machine
+import socket
 
-PWM_CHANNELS = {
-    machine.PWM(machine.Pin(5), freq=50),
-    machine.PWM(machine.Pin(12), freq=50),
-    machine.PWM(machine.Pin(13), freq=50),
-    machine.PWM(machine.Pin(14), freq=50),
-    machine.PWM(machine.Pin(15), freq=50),
-}
+#define IOs
+io_lights = 5
+io_motor1_n = 0
+io_motor1_p = 4
+io_motor2_n = 2
+io_motor2_p = 15
+io_motors_enable = 16
+io_servo_steering = 12
+io_servo_leveler1 = 13
+io_servo_leveler2 = 14
+
+def init_ios():
+    machine.Pin(io_motors_enable,machine.Pin.OUT).value(0)
+    machine.Pin(io_motor1_n,machine.Pin.OUT).value(0)
+    machine.Pin(io_motor1_p,machine.Pin.OUT).value(0)
+    machine.Pin(io_motor2_n,machine.Pin.OUT).value(0)
+    machine.Pin(io_motor2_p,machine.Pin.OUT).value(0)
+
+
+def set_lights(value):
+    if value == 100:
+        machine.Pin(io_lights,machine.Pin.OUT).value(1)
+    else:
+        machine.Pin(io_lights,machine.Pin.OUT).value(0)
+
+def set_steering(value):
+    steering_max = 106
+    steering_min = 50
+    servo_pos = int(float(steering_max-steering_min)/200.0*float(value+100)+steering_min)
+    machine.PWM(machine.Pin(io_servo_steering), freq=50).duty(servo_pos)
+
+def set_motor(value):
+    min_duty = 120
+    machine.Pin(io_motors_enable,machine.Pin.OUT).value(0)
+    if value != 0:
+        duty_value = int(abs(value) * 1023 / 100)
+        if duty_value < min_duty:
+            duty_value = min_duty
+        if value < 0:
+            machine.Pin(io_motor1_n,machine.Pin.OUT).value(0)
+            machine.Pin(io_motor2_n,machine.Pin.OUT).value(0)
+            machine.PWM(machine.Pin(io_motor1_p), freq=50).duty(duty_value)
+            machine.PWM(machine.Pin(io_motor2_p), freq=50).duty(duty_value)
+        else:
+            machine.Pin(io_motor1_p,machine.Pin.OUT).value(0)
+            machine.Pin(io_motor2_p,machine.Pin.OUT).value(0)
+            machine.PWM(machine.Pin(io_motor1_n), freq=50).duty(duty_value)
+            machine.PWM(machine.Pin(io_motor2_n), freq=50).duty(duty_value)
+        machine.Pin(io_motors_enable,machine.Pin.OUT).value(1)
+
+def set_leveler(value):
+    servo1_min = 102
+    servo2_min = 40
+    servo1_max = 40
+    servo2_max = 108
+
+    servo1_pos = int(float(servo1_max-servo1_min)/200.0*float(value+100)+servo1_min)
+    servo2_pos = int(float(servo2_max-servo2_min)/200.0*float(value+100)+servo2_min)
+    machine.PWM(machine.Pin(io_servo_leveler1), freq=50).duty(servo1_pos)
+    machine.PWM(machine.Pin(io_servo_leveler2), freq=50).duty(servo2_pos)
+
+
 
 def res():
     machine.reset()
@@ -46,27 +102,27 @@ async def dns_server():
         return None
 
     s = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-    s.bind(('127.0.0.1',53))
+    s.bind(('192.168.4.1',53))
     s.setblocking(False)
 
     while True:
+        await asyncio.sleep(1)
         try:
-            await asyncio.sleep(1)
             packet, clientIP = s.recvfrom(256)
-            packet = getPacketAnswerA (packet, b'\x01\x02\x03\x04')
+            packet = getPacketAnswerA (packet, b'\xC0\xA8\x04\x01') # 192.168.4.1
             s.sendto(packet, clientIP)
-        except socket.error:
+        except :
             pass
 
 async def websocket_echo_handler(reader,writer):
     # Consume GET line
-    yield from reader.readline()
+    await reader.readline()
 
-    reader = yield from WSReader(reader, writer)
+    reader = await WSReader(reader, writer)
     writer = WSWriter(reader, writer)
 
     while True:
-        l = yield from reader.read(256)
+        l = await reader.read(256)
         print(l)
         if l == b"\r":
             await writer.awrite(b"\r\n")
@@ -75,25 +131,26 @@ async def websocket_echo_handler(reader,writer):
 
 async def websocket_rc_receiver_handler(reader,writer):
     # Consume GET line
-    yield from reader.readline()
+    await reader.readline()
 
-    reader = yield from WSReader(reader, writer)
+    reader = await WSReader(reader, writer)
+    writer = WSWriter(reader, writer)
 
     while True:
-        l = yield from reader.readline()
+        l = await reader.readline()
         try:
-            channel = int(l.split(",")[0])
-            motor_type = int(l.split(",")[1])
-            value = float(l.split(",")[2])
-
-            if motor_type == "servo":
-                #convert angle to pwm
-                value = value / 180 * 75 + 40
-            else:
-                #convert percent to pwm
-                value = value / 100 * 1023
-
-            PWM_CHANNELS[channel].duty(value)
+            l = l.rstrip()
+            l = str(l).split("\'")[1]
+            rc_cmd = l.split(" ")[0]
+            rc_value = int(l.split(" ")[1])
+            if rc_cmd == "lights":
+                set_lights(rc_value)
+            if rc_cmd == "steering":
+                set_steering(rc_value)
+            if rc_cmd == "motor":
+                set_motor(rc_value)
+            if rc_cmd == "leveler":
+                set_leveler(rc_value)
 
         except:
             pass
@@ -131,15 +188,16 @@ async def http_handler(reader,writer):
             chunk = f.read(256)
         f.close()
     except:
-        await writer.awrite(RESPONSE_NOT_FOUND)
+        writer.awrite(RESPONSE_NOT_FOUND)
 
     await writer.aclose()
 
 
 
+init_ios()
 loop = asyncio.get_event_loop()
 loop.create_task(dns_server())
-loop.create_task(asyncio.start_server(http_handler, "0.0.0.0", 80))
+loop.create_task(asyncio.start_server(http_handler, "0.0.0.0", 80,backlog = 1))
 loop.create_task(asyncio.start_server(websocket_echo_handler, "0.0.0.0", 8081))
 loop.create_task(asyncio.start_server(websocket_rc_receiver_handler, "0.0.0.0", 8082))
 loop.run_forever()
