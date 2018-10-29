@@ -23,7 +23,10 @@ var ctr_xy = new controller (64, 64, "red", canvas_xy,function(x,y) {trans.updat
 var ctr_leveler = new controller (60, 30, "gray", canvas_leveler,function(x,y) {trans.update_leveler(x,y);});
 var swi_lights = new toggle_switch( "green", canvas_lights,function(s) {trans.update_lights(s);});
 
+websocket.onmessage = function(evt) { canvas_xy.getContext("2d").clearRect(0,0,50,20); canvas_xy.getContext("2d").fillText(evt.data,10,10); };
+
 setInterval(function() {trans.send_updates();}, 20);
+setInterval(function() {swi_lights.toggle();}, 250);
 
 
 ctr_xy.init();
@@ -146,27 +149,29 @@ function transmitter(websocket)
   }
 
   this.send_updates = function() {
+    updatestr = ""
     if (this.o_motor != this.motor) {
-      this.websocket.send("motor "+this.motor+"\n");
+      updatestr += ("motor "+this.motor+"\n");
       this.o_motor = this.motor;
     }
     if (this.o_steering != this.steering) {
-      this.websocket.send("steering "+this.steering+"\n");
+      updatestr += ("steering "+this.steering+"\n");
       this.o_steering = this.steering;
     }
     if (this.o_leveler != this.leveler) {
-      this.websocket.send("leveler "+this.leveler+"\n");
+      updatestr += ("leveler "+this.leveler+"\n");
       this.o_leveler = this.leveler;
     }
     if (this.o_lights != this.lights) {
       if(this.lights == true) {
-        this.websocket.send("lights 100\n");
+        updatestr += ("lights 100\n");
       } else {
-        this.websocket.send("lights 0\n");
+        updatestr += ("lights 0\n");
       }
       this.o_lights = this.lights;
     }
-
+    if (updatestr != "")
+      this.websocket.send(updatestr)
   }
 
 }

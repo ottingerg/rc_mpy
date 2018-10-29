@@ -4,92 +4,15 @@ import uos as os
 import machine
 import socket
 import utime
+from gpio import GPIO
 
 
+io = GPIO()
+g_mem_free = 0
 buf = bytearray(512)
 buf2 = bytearray(32)
 buf3 = bytearray(32)
 
-pin_lights = machine.Pin(5, machine.Pin.OUT)
-
-
-while ap_if.isconnected() == False:
-    pin_lights.value(1)
-    utime.sleep(1)
-    pin_lights.value(0)
-    print(gc.mem_free())
-    utime.sleep(1)
-
-
-#define IOs
-
-pin_motor1_n = machine.Pin(0)
-pin_motor1_p = machine.Pin(4)
-pin_motor2_n = machine.Pin(2)
-pin_motor2_p = machine.Pin(15)
-pin_motors_enable = machine.Pin(16, machine.Pin.OUT)
-pin_servo_steering = machine.Pin(12)
-pin_servo_leveler1 = machine.Pin(13)
-pin_servo_leveler2 = machine.Pin(14)
-
-pwm_motor1_n = machine.PWM(pin_motor1_n, freq=50)
-pwm_motor1_p = machine.PWM(pin_motor1_p)
-pwm_motor2_n = machine.PWM(pin_motor2_n)
-pwm_motor2_p = machine.PWM(pin_motor2_p)
-
-pwm_servo_steering = machine.PWM(pin_servo_steering)
-pwm_servo_leveler1 = machine.PWM(pin_servo_leveler1)
-pwm_servo_leveler2 = machine.PWM(pin_servo_leveler2)
-
-
-def init_ios():
-    pin_motors_enable.value(0)
-
-
-def set_lights(value):
-    if value == 100:
-        pin_lights.value(1)
-    else:
-        pin_lights.value(0)
-
-def set_steering(value):
-    steering_max = const(106)
-    steering_min = const(50)
-    servo_pos = int(float(steering_max-steering_min)/200.0*float(value+100)+steering_min)
-    pwm_servo_steering.duty(servo_pos)
-
-def set_motor(value):
-    min_duty = const(120)
-    pin_motors_enable.value(0)
-    if value != 0:
-        duty_value = int(abs(value) * 1023 / 100)
-        if duty_value < min_duty:
-            duty_value = min_duty
-        if value < 0:
-            pwm_motor1_n.duty(0)
-            pwm_motor2_n.duty(0)
-            pwm_motor1_p.duty(duty_value)
-            pwm_motor2_p.duty(duty_value)
-        else:
-            pwm_motor1_n.duty(duty_value)
-            pwm_motor2_n.duty(duty_value)
-            pwm_motor1_p.duty(0)
-            pwm_motor2_p.duty(0)
-        pin_motors_enable.value(1)
-
-def set_leveler(value):
-    servo1_min = const(102)
-    servo2_min = const(40)
-    servo1_max = const(40)
-    servo2_max = const(108)
-
-    servo1_pos = int(float(servo1_max-servo1_min)/200.0*float(value+100)+servo1_min)
-    servo2_pos = int(float(servo2_max-servo2_min)/200.0*float(value+100)+servo2_min)
-    pwm_servo_leveler1.duty(servo1_pos)
-    pwm_servo_leveler2.duty(servo2_pos)
-
-def res():
-    machine.reset()
 
 async def dns_server():
     def getPacketAnswerA(packet, ipV4Bytes) :
@@ -127,6 +50,7 @@ async def dns_server():
     s.setblocking(False)
 
     while True:
+
         await asyncio.sleep(1)
         try:
             packet, clientIP = s.recvfrom(256)
@@ -143,6 +67,7 @@ async def websocket_echo_handler(reader,writer):
     writer = WSWriter(reader, writer)
 
     while True:
+
         l = await reader.read(256)
         print(l)
         if l == b"\r":
@@ -157,22 +82,33 @@ async def websocket_rc_receiver_handler(reader,writer):
     reader = await WSReader(reader, writer)
     writer = WSWriter(reader, writer)
 
-    while True:
-        buf2 = await reader.readline()
+    websocket_working = True
+
+    while websocket_working:
+
+        try:
+            buf2 = await reader.readline()
+        except:
+            websocket_working = False
+            print("closing websocket!")
         try:
             buf3 = buf2.rstrip()
             buf2 = str(buf3).split("\'")[1]
             rc_cmd = buf2.split(" ")[0]
             rc_value = int(buf2.split(" ")[1])
             if rc_cmd == "lights":
-                set_lights(rc_value)
+                io.set_lights(rc_value)
             if rc_cmd == "steering":
-                set_steering(rc_value)
-            if rc_cmd == "motor":
-                set_motor(rc_value)
+                io.set_steering(rc_value)
+            if rc_cmd == "motor":            
+                io.set_motor(rc_value)
             if rc_cmd == "leveler":
-                set_leveler(rc_value)
-
+                io.set_leveler(rc_value)
+            try:
+                await writer.awrite(str(g_mem_free))
+            except:
+                websocket_working = False
+                print("closing websocket!")
         except:
             pass
 
@@ -214,12 +150,25 @@ async def http_handler(reader,writer):
     await writer.aclose()
 
 async def show_free_mem():
+    global g_mem_free
+
     while True:
         await asyncio.sleep(1)
-        m = gc.mem_free()
-        print(m)
+        g_mem_free = gc.mem_free()
+        print(g_mem_free)
 
-init_ios()
+print("---- EBRO 160D @ WORK ----")
+print(machine.reset_cause())
+
+while ap_if.isconnected() == False:
+    io.set_lights(100)
+    utime.sleep(1)
+    io.set_lights(0)
+    print(gc.mem_free())
+    utime.sleep(1)
+
+
+
 loop = asyncio.get_event_loop()
 loop.create_task(show_free_mem())
 loop.create_task(dns_server())
