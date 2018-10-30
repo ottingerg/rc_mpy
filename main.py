@@ -9,9 +9,6 @@ from gpio import GPIO
 
 io = GPIO()
 g_mem_free = 0
-buf = bytearray(512)
-buf2 = bytearray(32)
-buf3 = bytearray(32)
 
 
 async def dns_server():
@@ -87,20 +84,20 @@ async def websocket_rc_receiver_handler(reader,writer):
     while websocket_working:
 
         try:
-            buf2 = await reader.readline()
+            l = await reader.readline()
         except:
             websocket_working = False
-            print("closing websocket!")
+            print("closing websocket! (error on read)")
         try:
-            buf3 = buf2.rstrip()
-            buf2 = str(buf3).split("\'")[1]
-            rc_cmd = buf2.split(" ")[0]
-            rc_value = int(buf2.split(" ")[1])
+            l = l.rstrip()
+            l = str(l).split("\'")[1]
+            rc_cmd = l.split(" ")[0]
+            rc_value = int(l.split(" ")[1])
             if rc_cmd == "lights":
                 io.set_lights(rc_value)
             if rc_cmd == "steering":
                 io.set_steering(rc_value)
-            if rc_cmd == "motor":            
+            if rc_cmd == "motor":
                 io.set_motor(rc_value)
             if rc_cmd == "leveler":
                 io.set_leveler(rc_value)
@@ -108,7 +105,7 @@ async def websocket_rc_receiver_handler(reader,writer):
                 await writer.awrite(str(g_mem_free))
             except:
                 websocket_working = False
-                print("closing websocket!")
+                print("closing websocket! (error on write)")
         except:
             pass
 

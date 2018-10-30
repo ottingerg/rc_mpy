@@ -32,19 +32,15 @@ setInterval(function() {swi_lights.toggle();}, 250);
 ctr_xy.init();
 ctr_leveler.init();
 
-canvas_xy.addEventListener ("mousemove", function (event)
-			    {
-			    ctr_xy.moved (event);
-			    }
+canvas_xy.addEventListener ("mousemove", function (event) { ctr_xy.moved (event); }, false);
+canvas_xy.addEventListener ("touchmove", function (event) { ctr_xy.moved (event); }, false);
 
-			    , false);
+
 canvas_xy.addEventListener ("mouseup", function (event) { ctr_xy.init(); }, false);
-canvas_leveler.addEventListener ("mousemove", function (event)
-				 {
-				 ctr_leveler.moved (event);
-				 }
+canvas_xy.addEventListener ("touchend", function (event) { ctr_xy.init(); }, false);
 
-				 , false);
+canvas_leveler.addEventListener ("mousemove", function (event) { ctr_leveler.moved (event); }, false);
+canvas_leveler.addEventListener ("touchmove", function (event) { ctr_leveler.moved (event); }, false);
 
 canvas_lights.addEventListener ("click", function (event) { swi_lights.toggle(event); }, false);
 
