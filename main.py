@@ -76,20 +76,21 @@ async def websocket_rc_receiver_handler(reader,writer):
     # Consume GET line
     await reader.readline()
 
-    reader = await WSReader(reader, writer)
-    writer = WSWriter(reader, writer)
+    old_mem_free = 0
+    wsreader = await WSReader(reader, writer)
+    wswriter = WSWriter(reader, writer)
 
     websocket_working = True
 
     while websocket_working:
 
         try:
-            l = await reader.readline()
+            lr = await wsreader.readline()
         except:
             websocket_working = False
-            print("closing websocket! (error on read)")
+            print("closing websocket! (error on read)" + str(lr))
         try:
-            l = l.rstrip()
+            l = lr.rstrip()
             l = str(l).split("\'")[1]
             rc_cmd = l.split(" ")[0]
             rc_value = int(l.split(" ")[1])
@@ -102,12 +103,16 @@ async def websocket_rc_receiver_handler(reader,writer):
             if rc_cmd == "leveler":
                 io.set_leveler(rc_value)
             try:
-                await writer.awrite(str(g_mem_free))
+                if old_mem_free != g_mem_free:
+                    old_mem_free = g_mem_free
+                    await wswriter.awrite(str(g_mem_free))
             except:
                 websocket_working = False
                 print("closing websocket! (error on write)")
         except:
             pass
+
+        writer.aclose()
 
 async def http_handler(reader,writer):
     DIR_PREFIX = "www/"

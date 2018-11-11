@@ -82,10 +82,10 @@ class GPIO():
 
 
     def set_leveler(self,value):
-        servo1_min = const(102)
-        servo2_min = const(40)
-        servo1_max = const(40)
-        servo2_max = const(108)
+        servo1_min = const(120)
+        servo2_min = const(47)
+        servo1_max = const(47)
+        servo2_max = const(120)
 
         servo1_pos = int(float(servo1_max-servo1_min)/200.0*float(value+100)+servo1_min)
         servo2_pos = int(float(servo2_max-servo2_min)/200.0*float(value+100)+servo2_min)
