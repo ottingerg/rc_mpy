@@ -10,6 +10,7 @@
   <canvas id = "canvas_lights" width = "60" height = "60"
   style = "background-color:#333" >
   </canvas >
+  <button id="view-fullscreen" width="200">Fullscreen</button>
 
 <script >
 var canvas_xy = document.getElementById ("canvas_xy");
@@ -19,29 +20,78 @@ var canvas_lights = document.getElementById ("canvas_lights");
 var websocket = new WebSocket('ws://192.168.4.1:8082/');
 
 var trans = new transmitter(websocket);
-var ctr_xy = new controller (64, 64, "red", canvas_xy,function(x,y) {trans.update_move(x,y);});
-var ctr_leveler = new controller (60, 30, "gray", canvas_leveler,function(x,y) {trans.update_leveler(x,y);});
+var ctr_xy = new controller (128, 128, "red", canvas_xy,function(x,y) {trans.update_move(x,y);});
+var ctr_leveler = new controller (300, 80, "gray", canvas_leveler,function(x,y) {trans.update_leveler(x,y);});
 var swi_lights = new toggle_switch( "green", canvas_lights,function(s) {trans.update_lights(s);});
+
+function throttle (callback, limit) {
+  var wait = false;
+  return function () {
+    if (!wait) {
+      callback.apply(null, arguments);
+      wait = true;
+      setTimeout(function () {
+        wait = false;
+      }, limit);
+    }
+  }
+}
+
+function resizeCanvas() {
+    canvas_xy.width = window.innerWidth * 0.8;
+    canvas_xy.height = window.innerHeight * 1.1;
+    canvas_leveler.width = window.innerWidth * 0.15;
+    canvas_leveler.height = window.innerHeight * 0.9;
+    canvas_lights.width = window.innerWidth * 0.15;
+    canvas_lights.height = window.innerHeight * 0.2;
+    ctr_leveler.resize(window.innerWidth * 0.15,window.innerWidth * 0.15);
+    ctr_xy.resize(window.innerWidth * 0.2,window.innerWidth * 0.2);
+
+    //canvs.width = window.innerWidth;
+    //canvs.height = window.innerHeight;
+}
+
+var viewFullScreen = document.getElementById("view-fullscreen");
+if (viewFullScreen) {
+    viewFullScreen.addEventListener("click", function () {
+        resizeCanvas();
+        document.getElementById("view-fullscreen").style.visibility = 'hidden';
+        var docElm = document.documentElement;
+        if (docElm.requestFullscreen) {
+            docElm.requestFullscreen();
+        }
+        else if (docElm.msRequestFullscreen) {
+            docElm = document.body; //overwrite the element (for IE)
+            docElm.msRequestFullscreen();
+        }
+        else if (docElm.mozRequestFullScreen) {
+            docElm.mozRequestFullScreen();
+        }
+        else if (docElm.webkitRequestFullScreen) {
+            docElm.webkitRequestFullScreen();
+        }
+    }, false);
+}
 
 websocket.onmessage = function(evt) { canvas_xy.getContext("2d").clearRect(0,0,50,20); canvas_xy.getContext("2d").fillText(evt.data,10,10); };
 websocket.onclose = function(evt) { websocket = new WebSocket('ws://192.168.4.1:8082/'); }
 websocket.onerror = function(evt) { websocket.close(); }
 setInterval(function() {trans.send_updates();}, 20);
-setInterval(function() {swi_lights.toggle();}, 250);
+//setInterval(function() {swi_lights.toggle();}, 250);
 
 
 ctr_xy.init();
 ctr_leveler.init();
 
 canvas_xy.addEventListener ("mousemove", function (event) { ctr_xy.moved (event); }, false);
-canvas_xy.addEventListener ("touchmove", function (event) { ctr_xy.moved_t (event); }, false);
+canvas_xy.addEventListener ("touchmove", throttle(function (event) { ctr_xy.moved_t (event); },50), false);
 
 
 canvas_xy.addEventListener ("mouseup", function (event) { ctr_xy.init(); }, false);
 canvas_xy.addEventListener ("touchend", function (event) { ctr_xy.init(); }, false);
 
 canvas_leveler.addEventListener ("mousemove", function (event) { ctr_leveler.moved (event); }, false);
-canvas_leveler.addEventListener ("touchmove", function (event) { ctr_leveler.moved_t (event); }, false);
+canvas_leveler.addEventListener ("touchmove", throttle(function (event) { ctr_leveler.moved_t (event); },50), false);
 
 canvas_lights.addEventListener ("click", function (event) { swi_lights.toggle(event); }, false);
 
@@ -120,11 +170,16 @@ controller (width, height, color, canvas, update_xy)
   }
   this.moved_t = function (event)
   {
-    if (!event.buttons && event.type != "click") return;
+    //if (!event.buttons && event.type != "click") return;
     var rect = this.canvas.getBoundingClientRect ();
     var x = event.touches[0].clientX - rect.left;
     var y = event.touches[0].clientY - rect.top;
     this.update (x, y);
+  }
+  this.resize = function (x,y)
+  {
+    this.width = x;
+    this.height = y;
   }
 }
 
